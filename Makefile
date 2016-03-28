@@ -6,7 +6,7 @@
 
 CC=gcc
 BASE_CFLAGS=-Wall -Iinc -fPIC
-CFLAGS=$(BASE_CFLAGS) -Llib
+DCFLAGS=$(BASE_CFLAGS) -Llib
 DFLAGS=$(BASE_CFLAGS) -shared
 LFLAGS=-lgibraltar
 CUDAINC=-I $(CUDA_INC_PATH)
