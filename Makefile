@@ -5,10 +5,14 @@
 # and "make cpu=1" to use the low-performance CPU implementation.
 
 CC=gcc
-CFLAGS=-Wall -Llib -Iinc
+BASE_CFLAGS=-Wall -Iinc -fPIC
+CFLAGS=$(BASE_CFLAGS) -Llib
+DFLAGS=$(BASE_CFLAGS) -shared
 LFLAGS=-lgibraltar
 CUDAINC=-I $(CUDA_INC_PATH)
 CUDALIB=-L $(CUDA_LIB_PATH)
+INSTALL=install
+INSTALL_DIR=/usr/local
 min_test=2
 max_test=16
 test_range=`seq $(min_test) $(max_test)`
@@ -57,7 +61,7 @@ all:
 		false;	\
 	fi
 	echo $(LFLAGS) > LFLAGS
-	make examples
+	make examples shared
 
 examples: lib/libgibraltar.a
 	$(CXX) -Dmin_test=$(min_test) -Dmax_test=$(max_test) $(CFLAGS) \
@@ -65,11 +69,16 @@ examples: lib/libgibraltar.a
 	$(CXX) -Dmin_test=$(min_test) -Dmax_test=$(max_test) $(CFLAGS) \
 		examples/sweeping_test.cc -o examples/sweeping_test $(LFLAGS)
 
+shared: lib/libgibraltar.so
+
 obj/gibraltar.o: obj
 	$(CC) $(CFLAGS) -c $(GIB_IMP) -o obj/gibraltar.o
 
 lib/libgibraltar.a: obj/gibraltar.o $(GIB_OBJ) $(GIB_DEP)
 	ar rus lib/libgibraltar.a $(GIB_OBJ) obj/gibraltar.o
+
+lib/libgibraltar.so: obj/gibraltar.o $(GIB_OBJ)
+	$(CC) $(DCFLAGS) $^ $(LFLAGS) -o $@
 
 lib/libjerasure.a:
 	cd lib/Jerasure-1.2 && make
@@ -81,6 +90,10 @@ obj:
 obj/%.o: src/%.c obj
 	$(CC) $(CFLAGS) -c src/$*.c -o obj/$*.o
 
+install:
+	$(INSTALL) -s lib/libgibraltar.so $(INSTALL_DIR)/lib/
+	$(INSTALL) inc/*.h $(INSTALL_DIR)/include/
+
 # A special kind of rule:  These files don't need to be remade if they're
 # out of date, just destroyed.
 cache:  src/gib_cuda_checksum.cu
@@ -89,5 +102,5 @@ cache:  src/gib_cuda_checksum.cu
 
 clean:
 	rm -rf obj cache LFLAGS
-	rm -f lib/*.a
+	rm -f lib/*.a lib/*.so
 	rm -f examples/benchmark examples/sweeping_test

@@ -1,5 +1,5 @@
 LFLAGS
 examples/benchmark
 examples/sweeping_test
-lib/
+lib/*.*
 obj/
