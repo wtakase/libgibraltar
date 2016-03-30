@@ -8,7 +8,7 @@ CC=gcc
 BASE_CFLAGS=-Wall -Iinc -fPIC
 CFLAGS=$(BASE_CFLAGS) -Llib
 DCFLAGS=$(BASE_CFLAGS) -shared
-LFLAGS=-lgibraltar
+SLFLAGS=-lgibraltar
 CUDAINC=-I $(CUDA_INC_PATH)
 CUDALIB=-L $(CUDA_LIB_PATH)
 INSTALL=install
@@ -65,9 +65,9 @@ all:
 
 examples: lib/libgibraltar.a
 	$(CXX) -Dmin_test=$(min_test) -Dmax_test=$(max_test) $(CFLAGS) \
-		examples/benchmark.cc -o examples/benchmark $(LFLAGS)
+		examples/benchmark.cc -o examples/benchmark $(LFLAGS) $(SLFLAGS)
 	$(CXX) -Dmin_test=$(min_test) -Dmax_test=$(max_test) $(CFLAGS) \
-		examples/sweeping_test.cc -o examples/sweeping_test $(LFLAGS)
+		examples/sweeping_test.cc -o examples/sweeping_test $(LFLAGS) $(SLFLAGS)
 
 shared: lib/libgibraltar.so
 
