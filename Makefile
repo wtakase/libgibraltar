@@ -5,7 +5,7 @@
 # and "make cpu=1" to use the low-performance CPU implementation.
 
 CC=gcc
-BASE_CFLAGS=-Wall -Iinc -fPIC -DGIB_USE_MMAP=0
+BASE_CFLAGS=-Wall -Iinc -fPIC -DGIB_USE_MMAP=1
 CFLAGS=$(BASE_CFLAGS) -Llib
 DCFLAGS=$(BASE_CFLAGS) -shared
 SLFLAGS=-lgibraltar
