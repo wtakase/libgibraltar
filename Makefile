@@ -64,6 +64,8 @@ examples: lib/libgibraltar.a
 		examples/benchmark.cc -o examples/benchmark $(LFLAGS)
 	$(CXX) -Dmin_test=$(min_test) -Dmax_test=$(max_test) $(CFLAGS) \
 		examples/sweeping_test.cc -o examples/sweeping_test $(LFLAGS)
+	$(CXX) $(CFLAGS) examples/simple_encode/simple_encode.c \
+		-o examples/simple_encode/simple_encode $(LFLAGS)
 
 obj/gibraltar.o: obj
 	$(CC) $(CFLAGS) -c $(GIB_IMP) -o obj/gibraltar.o
@@ -91,3 +93,6 @@ clean:
 	rm -rf obj cache LFLAGS
 	rm -f lib/*.a
 	rm -f examples/benchmark examples/sweeping_test
+	rm -f ptx/*.ptx
+	rm -f examples/simple_encode/simple_encode
+	rm -f examples/simple_encode/out/out.*

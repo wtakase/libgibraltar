@@ -98,7 +98,7 @@ void gib_cuda_compile(int n, int m, char *filename) { /* never returns */
 			"--ptx", 
 			argv1, 
 			argv2,
-			"--gpu-architecture=sm_20",
+			"--gpu-architecture=sm_35",
 			src_filename, 
 			"-o", 
 			filename, 

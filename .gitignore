@@ -1,5 +1,8 @@
 LFLAGS
 examples/benchmark
 examples/sweeping_test
-lib/
+examples/simple_encode/simple_encode
+examples/simple_encode/out/out.*
+lib/libgibraltar.a
 obj/
+ptx/*.ptx
