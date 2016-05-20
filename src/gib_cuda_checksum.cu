@@ -8,8 +8,7 @@
 typedef unsigned char byte;
 __device__ unsigned char gf_log_d[256];
 __device__ unsigned char gf_ilog_d[256];
-__constant__ byte F_d[M*N];
-__constant__ byte inv_d[N*N];
+__device__ unsigned char F_d[M*N];
 
 /* The "fetch" datatype is the unit for performing data copies between areas of
  * memory on the GPU.  While today's wisdom says that 32-bit types are optimal
@@ -40,6 +39,7 @@ union shmem_bytes {
 /* Shared memory copies of pertinent data */
 __shared__ byte sh_log[256];
 __shared__ byte sh_ilog[256];
+__shared__ byte sh_F[M*N];
 
 __device__ __inline__ void load_tables(uint3 threadIdx, const dim3 blockDim) {
   /* Fully arbitrary routine for any blocksize and fetch size to load
@@ -55,12 +55,23 @@ __device__ __inline__ void load_tables(uint3 threadIdx, const dim3 blockDim) {
   }
 }
 
+__device__ __inline__ void load_matrix(uint3 threadIdx, const dim3 blockDim) {
+  int iters = ROUNDUPDIV(M*N,fetchsize);
+  for (int i = 0; i < iters; i++) {
+    if (i*fetchsize/SOF+threadIdx.x < M*N/SOF) {
+      int fetchit = threadIdx.x + i*fetchsize/SOF;
+      ((fetch *)sh_F)[fetchit] = *(fetch *)(&F_d[fetchit*SOF]);
+    }
+  }
+}
+
 __global__ void gib_recover_d(shmem_bytes *bufs, int buf_size,
 			      int recover_last) {
   /* Requirement: 
      buf_size % SOF == 0.  This prevents expensive divide operations. */
   int rank = threadIdx.x + __umul24(blockIdx.x, blockDim.x);
   load_tables(threadIdx, blockDim);
+  load_matrix(threadIdx, blockDim);
 	
   /* Load the data to shared memory */
   shmem_bytes out[M];
@@ -78,8 +89,8 @@ __global__ void gib_recover_d(shmem_bytes *bufs, int buf_size,
 	 helps/helped on the 8000-series parts, but it hurts performance on 
 	 the 260+.
       */
-      //if (F_d[j*N+i] != 0) {
-      int F_tmp = sh_log[F_d[j*N+i]]; /* No load conflicts */
+      //if (sh_F[j*N+i] != 0) {
+      int F_tmp = sh_log[sh_F[j*N+i]]; /* No load conflicts */
       for (int b = 0; b < SOF; ++b) {
 	if (in.b[b] != 0) {
 	  int sum_log = F_tmp + sh_log[(in.b)[b]];
@@ -110,6 +121,7 @@ __global__ void gib_checksum_d(shmem_bytes *bufs, int buf_size) {
 #endif
   int rank = threadIdx.x + __umul24(blockIdx.x, blockDim.x);
   load_tables(threadIdx, blockDim);
+  load_matrix(threadIdx, blockDim);
 	
   /* Load the data to shared memory */
   shmem_bytes out[M];
@@ -126,8 +138,8 @@ __global__ void gib_checksum_d(shmem_bytes *bufs, int buf_size) {
       /* If I'm not hallucinating, this conditional really
 	 helps on the 8800 stuff, but it hurts on the 260.
       */
-      //if (F_d[j*N+i] != 0) {
-      int F_tmp = sh_log[F_d[j*N+i]]; /* No load conflicts */
+      //if (sh_F[j*N+i] != 0) {
+      int F_tmp = sh_log[sh_F[j*N+i]]; /* No load conflicts */
       for (int b = 0; b < SOF; ++b) {
 	if (in.b[b] != 0) {
 	  int sum_log = F_tmp + sh_log[(in.b)[b]];

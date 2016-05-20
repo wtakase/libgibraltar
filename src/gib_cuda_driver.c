@@ -120,6 +120,10 @@ int gib_init ( int n, int m, gib_context *c ) {
 	    "less than two.  Use XOR or replication instead.\n");
     exit(1);
   }
+  if (m * n > 48640) {
+    fprintf(stderr, "m * n > 48640.\n");
+    exit(1);
+  }
   int rc_i = gib_cpu_init(n,m,c);
   if (rc_i != GIB_SUC) {
     fprintf(stderr, "gib_cpu_init returned %i\n", rc_i);
