@@ -119,24 +119,22 @@ __global__ void gib_checksum_d(shmem_bytes *bufs, int buf_size) {
     out[i].f = 0;
 
   __syncthreads();
-  for (int i = 0; i < N; ++i) {
-    /* Fetch the in-disk */
-    in.f = bufs[rank+buf_size/SOF*i].f;
-    for (int j = 0; j < M; ++j) {
-      /* If I'm not hallucinating, this conditional really
-	 helps on the 8800 stuff, but it hurts on the 260.
-      */
-      //if (F_d[j*N+i] != 0) {
-      int F_tmp = sh_log[F_d[j*N+i]]; /* No load conflicts */
-      for (int b = 0; b < SOF; ++b) {
-	if (in.b[b] != 0) {
-	  int sum_log = F_tmp + sh_log[(in.b)[b]];
-	  if (sum_log >= 255) sum_log -= 255;
-	  (out[j].b)[b] ^= sh_ilog[sum_log];
-	}
+  in.f = bufs[rank].f;
+  int index = rank / (buf_size / SOF);
+  for (int j = 0; j < M; ++j) {
+    /* If I'm not hallucinating, this conditional really
+       helps on the 8800 stuff, but it hurts on the 260.
+    */
+    //if (F_d[j*N+index] != 0) {
+    int F_tmp = sh_log[F_d[j*N+index]]; /* No load conflicts */
+    for (int b = 0; b < SOF; ++b) {
+      if (in.b[b] != 0) {
+        int sum_log = F_tmp + sh_log[(in.b)[b]];
+        if (sum_log >= 255) sum_log -= 255;
+          (out[j].b)[b] = sh_ilog[sum_log];
       }
-      //}
     }
+    //}
   }
   /* This works as long as buf_size % blocksize == 0 */
 #ifdef RAID6_FIX
@@ -144,6 +142,8 @@ __global__ void gib_checksum_d(shmem_bytes *bufs, int buf_size) {
 #define M 2
 #undef RAID6_FIX
 #endif
-  for (int i = 0; i < M; i++) 
-    bufs[rank+buf_size/SOF*(i+N)].f = out[i].f;
+  int chunk = rank % (buf_size / SOF);
+  for (int i = 0; i < M; i++)
+    for (int b = 0; b < SOF; ++b)
+      (bufs[chunk+buf_size/SOF*(i+N)].b)[b] ^= (out[i].b)[b];
 }

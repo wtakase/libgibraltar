@@ -321,7 +321,7 @@ int gib_generate ( void *buffers, int buf_size, gib_context c ) {
 			       sizeof(buf_size)));
   offset += sizeof(buf_size);
   ERROR_CHECK_FAIL(cuParamSetSize(gpu_c->checksum, offset));
-  ERROR_CHECK_FAIL(cuLaunchGrid(gpu_c->checksum, nblocks, 1));
+  ERROR_CHECK_FAIL(cuLaunchGrid(gpu_c->checksum, nblocks * (c->n), 1));
 
   /* Get the results back */
 #if !GIB_USE_MMAP
