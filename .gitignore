@@ -2,7 +2,11 @@ LFLAGS
 examples/benchmark
 examples/sweeping_test
 examples/simple_encode/simple_encode
+examples/simple_encode/infile_5120
 examples/simple_encode/out/out.*
+examples/simple_encode/out.*
 lib/libgibraltar.a
+src/gib_cuda_checksum.cu.*
+*.swp
 obj/
 ptx/*.ptx

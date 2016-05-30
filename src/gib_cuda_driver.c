@@ -289,7 +289,10 @@ int gib_generate ( void *buffers, int buf_size, gib_context c ) {
 
   int nthreads_per_block = 128;
   int fetch_size = sizeof(int)*nthreads_per_block;
-  int nblocks = (buf_size + fetch_size - 1)/fetch_size;
+  int nblocks = (buf_size + fetch_size - 1)/fetch_size*(c->n);
+  int work_nthreads_per_block = (nthreads_per_block / c->n) * c->n;
+  int rest_per_block = nthreads_per_block - work_nthreads_per_block;
+  int rest_nblocks = (nblocks * rest_per_block) / work_nthreads_per_block + 1;
   gpu_context gpu_c = (gpu_context) c->acc_context;
   
   unsigned char F[256*256];
@@ -297,6 +300,20 @@ int gib_generate ( void *buffers, int buf_size, gib_context c ) {
   CUdeviceptr F_d;
   ERROR_CHECK_FAIL(cuModuleGetGlobal(&F_d, NULL, gpu_c->module, "F_d"));
   ERROR_CHECK_FAIL(cuMemcpyHtoD(F_d, F, (c->m)*(c->n)));
+
+  CUdeviceptr work_nthreads_per_block_d;
+  ERROR_CHECK_FAIL(cuModuleGetGlobal(&work_nthreads_per_block_d, NULL,
+                                     gpu_c->module, "work_nthreads_per_block_d"));
+  ERROR_CHECK_FAIL(cuMemcpyHtoD(work_nthreads_per_block_d,
+                                &work_nthreads_per_block, sizeof(int)));
+  CUdeviceptr rest_per_block_d;
+  ERROR_CHECK_FAIL(cuModuleGetGlobal(&rest_per_block_d, NULL,
+                                     gpu_c->module, "rest_per_block_d"));
+  ERROR_CHECK_FAIL(cuMemcpyHtoD(rest_per_block_d, &rest_per_block, sizeof(int)));
+  int rank_max = nblocks * nthreads_per_block;
+  CUdeviceptr rank_max_d;
+  ERROR_CHECK_FAIL(cuModuleGetGlobal(&rank_max_d, NULL, gpu_c->module, "rank_max_d"));
+  ERROR_CHECK_FAIL(cuMemcpyHtoD(rank_max_d, &rank_max, sizeof(int)));
   
 #if !GIB_USE_MMAP
   /* Copy the buffers to memory */
@@ -321,7 +338,7 @@ int gib_generate ( void *buffers, int buf_size, gib_context c ) {
 			       sizeof(buf_size)));
   offset += sizeof(buf_size);
   ERROR_CHECK_FAIL(cuParamSetSize(gpu_c->checksum, offset));
-  ERROR_CHECK_FAIL(cuLaunchGrid(gpu_c->checksum, nblocks * (c->n), 1));
+  ERROR_CHECK_FAIL(cuLaunchGrid(gpu_c->checksum, nblocks + rest_nblocks, 1));
 
   /* Get the results back */
 #if !GIB_USE_MMAP
