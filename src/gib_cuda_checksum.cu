@@ -111,18 +111,15 @@ __global__ void gib_checksum_d(shmem_bytes *bufs, int buf_size) {
 #define M 3
 #define RAID6_FIX    
 #endif
+  int m = M;
   load_tables(threadIdx, blockDim);
-	
+  __syncthreads();
+
   /* Load the data to shared memory */
   shmem_bytes in;
-  __shared__ shmem_bytes sh_out[M*(nthreadsPerBlock/N)*N];
+  __shared__ shmem_bytes sh_out[M*nthreadsPerBlock];
 
-  int index_base = threadIdx.x * M;
-  for (int i = 0; i < M; i++)
-    sh_out[index_base + i].f = 0;
-
-  int rank = threadIdx.x + __umul24(blockIdx.x, blockDim.x);
-  rank -= blockIdx.x * rest_per_block_d;
+  int rank = threadIdx.x + __umul24(blockIdx.x, blockDim.x) - blockIdx.x * rest_per_block_d;
 
   unsigned char do_nothing = 0;
   if (threadIdx.x >= work_nthreads_per_block_d) do_nothing = 1;
@@ -130,10 +127,11 @@ __global__ void gib_checksum_d(shmem_bytes *bufs, int buf_size) {
 
   int group_id = rank / N;
   int id_in_group = rank % N;
-  __syncthreads();
+  int index_base = threadIdx.x * M;
   if (!do_nothing) {
     in.f = bufs[group_id+buf_size/SOF*id_in_group].f;
     for (int j = 0; j < M; ++j) {
+      sh_out[index_base + j].f = 0;
       int F_tmp = sh_log[F_d[j*N+id_in_group]];
       for (int b = 0; b < SOF; ++b) {
         if (in.b[b] != 0) {
@@ -151,20 +149,16 @@ __global__ void gib_checksum_d(shmem_bytes *bufs, int buf_size) {
 #undef RAID6_FIX
 #endif
   __syncthreads();
-  shmem_bytes out[M];
   if (!do_nothing) {
     if (id_in_group == 0) {
-      for (int i = 0; i < M; ++i)
-        out[i].f = 0;
-      for (int i = 0; i < N; ++i) {
+      for (int i = 1; i < N; ++i) {
         for (int j = 0; j < M; ++j) {
           for (int b = 0; b < SOF; ++b)
-            (out[j].b)[b] ^= (sh_out[threadIdx.x * M + M * i + j].b)[b];
+            (sh_out[index_base + j].b)[b] ^= (sh_out[index_base + m * i + j].b)[b];
         }
       }
-      for (int i = 0; i < M; ++i) {
-        bufs[group_id+buf_size/SOF*(i+N)].f = out[i].f;
-      }
+      for (int i = 0; i < M; ++i)
+        bufs[group_id+buf_size/SOF*(i+N)].f = sh_out[index_base + i].f;
     }
   }
 }
