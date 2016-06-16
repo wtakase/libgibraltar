@@ -21,7 +21,8 @@
 
 /* Size of each GPU buffer; n+m will be allocated */
 #if !GIB_USE_MMAP
-int gib_buf_size = 1024*1024; 
+int gib_buf_size = 1024*1024;
+long long int max_device_mem = 1024L*1024L*4799L;
 #endif
 
 #include "../inc/gibraltar.h"
@@ -63,6 +64,17 @@ typedef struct gpu_context_t * gpu_context;
       exit(EXIT_FAILURE);						\
     }									\
   }
+
+long long int gib_get_allocated_size(long long int data_size, gib_context c) {
+  long long int allocated_size = (data_size * (c->n + c->m) / c->n);
+  if (allocated_size > max_device_mem) {
+    fprintf(stderr,
+           "allocated_size(%lld) > max_device_mem(%lld).\n",
+           allocated_size, max_device_mem);
+    exit(-1);
+  }
+  return allocated_size;
+}
 
 /* Massive performance increases come from compiling the CUDA kernels 
    specifically for the coding process at hand.  This does so with the
@@ -209,7 +221,7 @@ int gib_init ( int n, int m, gib_context *c ) {
   /* If we got here, the ptx file exists.  Use it. */
   ERROR_CHECK_FAIL(cuModuleLoad(&(gpu_c->module), filename));
   ERROR_CHECK_FAIL(cuModuleGetFunction(&(gpu_c->checksum), (gpu_c->module), 
-	       "_Z14gib_checksum_dP11shmem_bytesi"));
+	       "_Z14gib_checksum_dP11shmem_bytesii"));
   ERROR_CHECK_FAIL(cuModuleGetFunction(&(gpu_c->recover),
 	       (gpu_c->module), 
 	       "_Z13gib_recover_dP11shmem_bytesii"));
@@ -228,9 +240,6 @@ int gib_init ( int n, int m, gib_context *c ) {
   ERROR_CHECK_FAIL(cuMemcpyHtoD(ilog_d, gib_gf_ilog, 256));
   ERROR_CHECK_FAIL(cuModuleGetGlobal(&F_d, NULL, gpu_c->module, "F_d"));
   ERROR_CHECK_FAIL(cuMemcpyHtoD(F_d, F, m*n));
-#if !GIB_USE_MMAP
-  ERROR_CHECK_FAIL(cuMemAlloc(&(gpu_c->buffers), (n+m)*gib_buf_size));
-#endif
   ERROR_CHECK_FAIL(cuCtxPopCurrent((&gpu_c->pCtx)));
   free(filename);
   return GIB_SUC;
@@ -253,13 +262,16 @@ int gib_destroy ( gib_context c ) {
   return GIB_SUC;
 }
 
-int gib_alloc ( void **buffers, int buf_size, int *ld, gib_context c ) {
+int gib_alloc ( void **buffers, int buf_size, int *ld, gib_context c, long long int data_size ) {
   ERROR_CHECK_FAIL(cuCtxPushCurrent(((gpu_context)(c->acc_context))->pCtx));
 #if GIB_USE_MMAP
   ERROR_CHECK_FAIL(cuMemHostAlloc(buffers, (c->n+c->m)*buf_size, 
 				  CU_MEMHOSTALLOC_DEVICEMAP));
 #else
-  ERROR_CHECK_FAIL(cuMemAllocHost(buffers, (c->n+c->m)*buf_size));
+  long long int allocated_size = gib_get_allocated_size(data_size, c);
+  ERROR_CHECK_FAIL(cuMemAlloc(&(((gpu_context)(c->acc_context))->buffers), allocated_size));
+  //ERROR_CHECK_FAIL(cuMemAllocHost(buffers, allocated_size));
+  ERROR_CHECK_FAIL(cuMemHostAlloc(buffers, allocated_size, CU_MEMHOSTALLOC_PORTABLE));
 #endif
   *ld = buf_size;
   ERROR_CHECK_FAIL(cuCtxPopCurrent(&((gpu_context)(c->acc_context))->pCtx));
@@ -273,19 +285,27 @@ int gib_free ( void *buffers, gib_context c ) {
   return GIB_SUC;
 }
 
-int gib_generate ( void *buffers, int buf_size, gib_context c ) {
+int gib_copy_to_device_memory(void *buffers, long long int data_size, gib_context c) {
+  gpu_context gpu_c = (gpu_context) c->acc_context;
+  ERROR_CHECK_FAIL(cuCtxPushCurrent(gpu_c->pCtx));
+  ERROR_CHECK_FAIL(cuMemcpyHtoD(gpu_c->buffers, buffers, data_size));
+  ERROR_CHECK_FAIL(cuCtxPopCurrent(&gpu_c->pCtx));
+  return GIB_SUC;
+}
+
+int gib_copy_from_device_memory(void *buffers, long long int data_size, gib_context c) {
+  long long int allocated_size = gib_get_allocated_size(data_size, c);
+  gpu_context gpu_c = (gpu_context) c->acc_context;
+  ERROR_CHECK_FAIL(cuCtxPushCurrent(gpu_c->pCtx));
+  CUdeviceptr tmp_d = gpu_c->buffers + data_size;
+  void *tmp_h = (void *)((unsigned char *)(buffers) + data_size);
+  ERROR_CHECK_FAIL(cuMemcpyDtoH(tmp_h, tmp_d, allocated_size - data_size));
+  ERROR_CHECK_FAIL(cuCtxPopCurrent(&gpu_c->pCtx));
+  return GIB_SUC;
+}
+
+int gib_generate ( void *buffers, int buf_size, gib_context c, int index, long long int data_size ) {
   ERROR_CHECK_FAIL(cuCtxPushCurrent(((gpu_context)(c->acc_context))->pCtx));
-  /* Do it all at once if the buffers are small enough */
-#if !GIB_USE_MMAP
-  /* This is too large to do at once in the GPU memory we have allocated.
-   * Split it into several noncontiguous jobs. 
-   */
-  if (buf_size > gib_buf_size) {
-    int rc = gib_generate_nc(buffers, buf_size, buf_size, c);
-    ERROR_CHECK_FAIL(cuCtxPopCurrent(&((gpu_context)(c->acc_context))->pCtx));
-    return rc;
-  }
-#endif
 
   int nthreads_per_block = 128;
   int fetch_size = sizeof(int)*nthreads_per_block;
@@ -297,12 +317,10 @@ int gib_generate ( void *buffers, int buf_size, gib_context c ) {
   CUdeviceptr F_d;
   ERROR_CHECK_FAIL(cuModuleGetGlobal(&F_d, NULL, gpu_c->module, "F_d"));
   ERROR_CHECK_FAIL(cuMemcpyHtoD(F_d, F, (c->m)*(c->n)));
+  CUdeviceptr data_size_d;
+  ERROR_CHECK_FAIL(cuModuleGetGlobal(&data_size_d, NULL, gpu_c->module, "data_size_d"));
+  ERROR_CHECK_FAIL(cuMemcpyHtoD(data_size_d, &data_size, sizeof(long long int)));
   
-#if !GIB_USE_MMAP
-  /* Copy the buffers to memory */
-  ERROR_CHECK_FAIL(cuMemcpyHtoD(gpu_c->buffers, buffers, 
-				(c->n)*buf_size));
-#endif
   /* Configure and launch */
   ERROR_CHECK_FAIL(cuFuncSetBlockShape(gpu_c->checksum, nthreads_per_block,
 				       1, 1));
@@ -320,15 +338,14 @@ int gib_generate ( void *buffers, int buf_size, gib_context c ) {
   ERROR_CHECK_FAIL(cuParamSetv(gpu_c->checksum, offset, &buf_size,
 			       sizeof(buf_size)));
   offset += sizeof(buf_size);
+  ERROR_CHECK_FAIL(cuParamSetv(gpu_c->checksum, offset, &index,
+                               sizeof(index)));
+  offset += sizeof(index);
   ERROR_CHECK_FAIL(cuParamSetSize(gpu_c->checksum, offset));
   ERROR_CHECK_FAIL(cuLaunchGrid(gpu_c->checksum, nblocks, 1));
 
   /* Get the results back */
-#if !GIB_USE_MMAP
-  CUdeviceptr tmp_d = gpu_c->buffers + c->n*buf_size;
-  void *tmp_h = (void *)((unsigned char *)(buffers) + c->n*buf_size);
-  ERROR_CHECK_FAIL(cuMemcpyDtoH(tmp_h, tmp_d, (c->m)*buf_size));
-#else
+#if GIB_USE_MMAP
   ERROR_CHECK_FAIL(cuCtxSynchronize());
 #endif
   ERROR_CHECK_FAIL(cuCtxPopCurrent(&((gpu_context)(c->acc_context))->pCtx));
@@ -431,4 +448,3 @@ int gib_recover_nc ( void *buffers, int buf_size, int work_size, int *buf_ids,
   return gib_cpu_recover_nc(buffers, buf_size, work_size, buf_ids, 
 			    recover_last, c);
 }
-

@@ -58,12 +58,12 @@ int main() {
       /* Allocate/define the appropriate number of buffers */
       int size = 1024*1024;
       void *data;
-      gib_alloc(&data, size, &size, gc);
+      gib_alloc(&data, size, &size, gc, 0);
 			
       for (int i = 0; i < size * n; i++)
 	((char *)data)[i] = (unsigned char)rand()%256;
 	
-      time_iters(chk_time, gib_generate(data, size, gc), iters);
+      time_iters(chk_time, gib_generate(data, size, gc, 0, 0), iters);
 
       unsigned char *backup_data = (unsigned char *)malloc(size * (n+m));
       memcpy(backup_data, data, size * (n+m));
@@ -99,7 +99,7 @@ int main() {
       }
       
       void *dense_data;
-      gib_alloc((void **)&dense_data, size, &size, gc);
+      gib_alloc((void **)&dense_data, size, &size, gc, 0);
       for (int i = 0; i < m+n; i++) {
 	memcpy((unsigned char *)dense_data+i*size, 
 	       (unsigned char *)data+buf_ids[i]*size, size);

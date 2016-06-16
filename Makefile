@@ -22,7 +22,7 @@ test_range=`seq $(min_test) $(max_test)`
 ifneq ($(cuda),)
 # Just for the sake of having someplace to put ptx/cubin files.
 GIB_IMP=src/gib_cuda_driver.c
-CFLAGS+=$(CUDAINC)
+CFLAGS+=$(CUDAINC) -DGIB_USE_MMAP=0
 LFLAGS+=$(CUDALIB)
 LFLAGS+=-lcudart -lcuda
 GIB_OBJ+=obj/gib_galois.o obj/gib_cpu_funcs.o
