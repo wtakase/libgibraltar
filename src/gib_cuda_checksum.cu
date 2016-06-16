@@ -128,8 +128,9 @@ __global__ void gib_checksum_d(shmem_bytes *bufs, int buf_size) {
   int group_id = rank / N;
   int id_in_group = rank % N;
   int index_base = threadIdx.x * M;
+  int stride = buf_size/SOF;
   if (!do_nothing) {
-    in.f = bufs[group_id+buf_size/SOF*id_in_group].f;
+    in.f = bufs[group_id+stride*id_in_group].f;
     for (int j = 0; j < M; ++j) {
       sh_out[index_base + j].f = 0;
       int F_tmp = sh_log[F_d[j*N+id_in_group]];
@@ -137,7 +138,7 @@ __global__ void gib_checksum_d(shmem_bytes *bufs, int buf_size) {
         if (in.b[b] != 0) {
           int sum_log = F_tmp + sh_log[(in.b)[b]];
           if (sum_log >= 255) sum_log -= 255;
-            (sh_out[index_base + j].b)[b] = sh_ilog[sum_log];
+          (sh_out[index_base + j].b)[b] = sh_ilog[sum_log];
         }
       }
     }
@@ -158,7 +159,7 @@ __global__ void gib_checksum_d(shmem_bytes *bufs, int buf_size) {
         }
       }
       for (int i = 0; i < M; ++i)
-        bufs[group_id+buf_size/SOF*(i+N)].f = sh_out[index_base + i].f;
+        bufs[group_id+stride*(i+N)].f = sh_out[index_base + i].f;
     }
   }
 }

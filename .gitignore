@@ -10,3 +10,4 @@ src/gib_cuda_checksum.cu.*
 *.swp
 obj/
 ptx/*.ptx
+*.csv
