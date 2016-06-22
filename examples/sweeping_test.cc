@@ -171,14 +171,14 @@ int main(int argc, char **argv) {
       fprintf(stderr, "n = %i, m = %i\n", n, m);
       gib_context gc;
       int rc = gib_init(n, m, &gc);
-      gib_alloc((void **)(&buf), buf_size*sizeof(int), &size_sc, gc, 0);
+      gib_alloc((void **)(&buf), buf_size*sizeof(int), &size_sc, gc, 1);
       if (rc) {
 	printf("Error:  %i\n", rc);
 	exit(EXIT_FAILURE);
       }
 
       memcpy(backup_buf, buf, n*buf_size*sizeof(int));
-      gib_generate(buf, buf_size*sizeof(int), gc, 0, 0);
+      gib_generate(buf, buf_size*sizeof(int), gc);
 
       if (memcmp(buf, backup_buf, n*buf_size*sizeof(int))) {
 	printf("Generation failed.\n");
@@ -196,7 +196,7 @@ int main(int argc, char **argv) {
 	  exit(1);
 	}
 	memcpy(backup_buf, buf, n*buf_size*sizeof(int));
-	gib_generate(buf, buf_size*sizeof(int), gc, 0, 0);
+	gib_generate(buf, buf_size*sizeof(int), gc);
       }
 
       gib_free(buf, gc);

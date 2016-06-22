@@ -10,7 +10,7 @@ __device__ unsigned char gf_log_d[256];
 __device__ unsigned char gf_ilog_d[256];
 __constant__ byte F_d[M*N];
 __constant__ byte inv_d[N*N];
-__constant__ long long int data_size_d;
+__constant__ int data_size_d;
 
 /* The "fetch" datatype is the unit for performing data copies between areas of
  * memory on the GPU.  While today's wisdom says that 32-bit types are optimal
@@ -119,10 +119,11 @@ __global__ void gib_checksum_d(shmem_bytes *bufs, int buf_size, int index) {
   for (int i = 0; i < M; i++) 
     out[i].f = 0;
 
+  int buf_size_per_sof = buf_size/SOF;
   __syncthreads();
   for (int i = 0; i < N; ++i) {
     /* Fetch the in-disk */
-    in.f = bufs[rank+buf_size/SOF*i+index*buf_size/SOF*N].f;
+    in.f = bufs[rank+buf_size_per_sof*i+index*buf_size_per_sof*N].f;
     for (int j = 0; j < M; ++j) {
       /* If I'm not hallucinating, this conditional really
 	 helps on the 8800 stuff, but it hurts on the 260.
@@ -147,9 +148,9 @@ __global__ void gib_checksum_d(shmem_bytes *bufs, int buf_size, int index) {
 #endif
   for (int i = 0; i < M; i++) {
 #if GIB_USE_MMAP
-    bufs[rank+buf_size/SOF*(i+N)].f = out[i].f;
+    bufs[rank+buf_size_per_sof*(i+N)].f = out[i].f;
 #else
-    bufs[rank+buf_size/SOF*i+data_size_d/SOF+index*buf_size/SOF*M].f = out[i].f;
+    bufs[rank+buf_size_per_sof*i+data_size_d/SOF+index*buf_size_per_sof*M].f = out[i].f;
 #endif
   }
 }
