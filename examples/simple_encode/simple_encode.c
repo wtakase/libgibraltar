@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,7 +7,8 @@
 #include <sys/time.h>
 
 #define CHUNKSIZE 1049600
-#define BLOCKSIZE 104960
+#define FETCHSIZE 512
+#define STREAM_NUM 10
 
 double get_time(void) {
     struct timeval t;
@@ -14,13 +16,24 @@ double get_time(void) {
     return((double)(t.tv_sec) + (double)(t.tv_usec) * 0.001 * 0.001);
 }
 
+int aligned(int size, int align) {
+  return ceil((double)size / align) * align;
+}
+
+long int alignedl(long int size, int align) {
+  return ceill((double)size / align) * align;
+}
+
 int main(int argc, char *argv[]) {
   double time_start_total = get_time();
-  int i;
+  int i, j;
   int k = atoi(argv[1]);
   int m = atoi(argv[2]);
-  int blocksize = BLOCKSIZE;
+  int blocksize = CHUNKSIZE / k;
   double time_start, time_end;
+  double time_start_alloc;
+  bool out_flag = true;
+  if (argc == 6) out_flag = false;
 
   char *encoded;
   gib_context gc;
@@ -30,10 +43,9 @@ int main(int argc, char *argv[]) {
   time_end = get_time();
   printf("gib_init,%10.20f\n", time_end - time_start);
 
-  time_start = get_time();
-  gib_alloc((void **)&(encoded), blocksize, &blocksize, gc);
-  time_end = get_time();
-  printf("gib_alloc,%10.20f\n", time_end - time_start);
+  blocksize = aligned(blocksize, FETCHSIZE);
+  int chunksize = blocksize * k;
+  int paritysize = blocksize * m;
 
   time_start = get_time();
   FILE *fin = fopen(argv[3], "rb");
@@ -42,28 +54,37 @@ int main(int argc, char *argv[]) {
   fseek(fin, 0, SEEK_SET);
   time_end = get_time();
 
-  int j;
+  int stream_num = (filesize < chunksize * STREAM_NUM) ? 1 : STREAM_NUM;
+
+  time_start_alloc = time_start = get_time();
+  gib_alloc((void **)&(encoded), blocksize, &blocksize, gc);
+  time_end = get_time();
+  printf("gib_alloc,%10.20f\n", time_end - time_start);
+
+  filesize = alignedl(alignedl(filesize, blocksize), chunksize * stream_num);
+
   FILE *fout;
   char outname[256];
 
   time_start = get_time();
-  for (j = 0; j < filesize / CHUNKSIZE; j++) {
-    memset(encoded, 0, CHUNKSIZE);
-    for (i = 0; i < k; i++)
-      fread(&encoded[i * blocksize], sizeof(char) * blocksize, 1, fin);
+  for (j = 0; j < filesize / chunksize; j++) {
+    memset(encoded, 0, chunksize + paritysize);
+    fread(encoded, sizeof(char) * chunksize, 1, fin);
     gib_generate(encoded, blocksize, gc);
 
-    for (i = 0; i < k + m; i++) {
-      sprintf(outname, "%s/out.%02d", argv[4], i);
-      if (j == 0) fout = fopen(outname, "wb");
-      else fout = fopen(outname, "ab");
-      fwrite(&encoded[i * blocksize], blocksize, 1, fout);
-      fclose(fout);
+    if (out_flag) {
+      for (i = 0; i < k + m; i++) {
+        sprintf(outname, "%s/out.%02d", argv[4], i);
+        if (j == 0) fout = fopen(outname, "wb");
+        else fout = fopen(outname, "ab");
+        fwrite(&encoded[i * blocksize], blocksize, 1, fout);
+        fclose(fout);
+      }
     }
-
   }
   time_end = get_time();
   printf("gib_generate,%10.20f\n", time_end - time_start);
+  printf("gib_alloc + gib_generate,%10.20f\n", time_end - time_start_alloc);
 
   fclose(fin);
 
