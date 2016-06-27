@@ -231,7 +231,7 @@ int gib_init ( int n, int m, gib_context *c ) {
   ERROR_CHECK_FAIL(cuModuleGetGlobal(&F_d, NULL, gpu_c->module, "F_d"));
   ERROR_CHECK_FAIL(cuMemcpyHtoD(F_d, F, m*n));
 #if !GIB_USE_MMAP
-  ERROR_CHECK_FAIL(cuMemAlloc(&(gpu_c->buffers), (n+m)*gib_buf_size*gpu_c->stream_num));
+  ERROR_CHECK_FAIL(cuMemAlloc(&(gpu_c->buffers), (n+m)*gib_buf_size));
 #endif
   ERROR_CHECK_FAIL(cuCtxPopCurrent((&gpu_c->pCtx)));
   free(filename);
@@ -261,12 +261,16 @@ int gib_alloc ( void **buffers, int buf_size, int *ld, gib_context c, int stream
   ERROR_CHECK_FAIL(cuMemHostAlloc(buffers, (c->n+c->m)*buf_size, 
 				  CU_MEMHOSTALLOC_DEVICEMAP));
 #else
-  ((gpu_context)(c->acc_context))->stream_num = (stream_num < 1) ? 1 : stream_num;
-  ERROR_CHECK_FAIL(cuMemAlloc(&(((gpu_context)(c->acc_context))->buffers),
-                   (c->n+c->m)*buf_size*((gpu_context)(c->acc_context))->stream_num));
-  ERROR_CHECK_FAIL(cuMemHostAlloc(buffers,
-                   (c->n+c->m)*buf_size*((gpu_context)(c->acc_context))->stream_num,
-                   CU_MEMHOSTALLOC_PORTABLE));
+  if (stream_num <= 1) {
+    ERROR_CHECK_FAIL(cuMemAllocHost(buffers, (c->n+c->m)*buf_size));
+  } else {
+    ((gpu_context)(c->acc_context))->stream_num = stream_num;
+    ERROR_CHECK_FAIL(cuMemAlloc(&(((gpu_context)(c->acc_context))->buffers),
+                     (c->n+c->m)*buf_size*((gpu_context)(c->acc_context))->stream_num));
+    ERROR_CHECK_FAIL(cuMemHostAlloc(buffers,
+                     (c->n+c->m)*buf_size*((gpu_context)(c->acc_context))->stream_num,
+                     CU_MEMHOSTALLOC_PORTABLE));
+  }
 #endif
   *ld = buf_size;
   ERROR_CHECK_FAIL(cuCtxPopCurrent(&((gpu_context)(c->acc_context))->pCtx));
