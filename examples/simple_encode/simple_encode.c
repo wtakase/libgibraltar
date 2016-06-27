@@ -23,6 +23,8 @@ int main(int argc, char *argv[]) {
   int paritysize = blocksize * m;
   double time_start, time_end;
   double time_start_alloc, time_start_encode;
+  bool out_flag = true;
+  if (argc == 6) out_flag = false;
 
   char *encoded;
   gib_context gc;
@@ -64,19 +66,18 @@ int main(int argc, char *argv[]) {
   time_start = get_time();
   gib_copy_from_device_memory(encoded, filesize, gc);
 
-/*
-  for (j = 0; j < filesize / chunksize; j++) {
-    for (i = 0; i < k + m; i++) {
-      sprintf(outname, "%s/out.%02d", argv[4], i);
-      if (j == 0) fout = fopen(outname, "wb");
-      else fout = fopen(outname, "ab");
-      if (i < k) fwrite(&encoded[j * chunksize + i * blocksize], blocksize, 1, fout);
-      else fwrite(&encoded[j * paritysize + (i - k) * blocksize + filesize], blocksize, 1, fout);
-      fclose(fout);
+  if (out_flag) {
+    for (j = 0; j < filesize / chunksize; j++) {
+      for (i = 0; i < k + m; i++) {
+        sprintf(outname, "%s/out.%02d", argv[4], i);
+        if (j == 0) fout = fopen(outname, "wb");
+        else fout = fopen(outname, "ab");
+        if (i < k) fwrite(&encoded[j * chunksize + i * blocksize], blocksize, 1, fout);
+        else fwrite(&encoded[j * paritysize + (i - k) * blocksize + filesize], blocksize, 1, fout);
+        fclose(fout);
+      }
     }
   }
-*/
-
   time_end = get_time();
   printf(" gib_copy_from_device_memory,%10.20f\n", time_end - time_start);
   printf("gib_generate,%10.20f\n", time_end - time_start_encode);
