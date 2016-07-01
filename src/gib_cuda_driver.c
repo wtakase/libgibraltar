@@ -311,7 +311,7 @@ int gib_generate_async ( void *buffers, int buf_size, gib_context c ) {
   void *ptr = (void *)(gpu_c->buffers);
   cudaStream_t *stream = (cudaStream_t *)malloc(gpu_c->stream_num * sizeof(cudaStream_t));
   for (i = 0; i < gpu_c->stream_num; i++)
-    ERROR_CHECK_FAIL(cudaStreamCreate(&stream[i]));
+    ERROR_CHECK_FAIL(cudaStreamCreateWithFlags(&stream[i], cudaStreamNonBlocking));
 
   for (i = 0; i < gpu_c->stream_num; i++) {
     data_start_pos = i * data_stride;
