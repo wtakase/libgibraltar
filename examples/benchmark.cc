@@ -49,7 +49,7 @@ int main() {
       double chk_time, dns_time;
       printf("%8i %8i ", n, m);
       gib_context gc;
-      int rc = gib_init(n, m, &gc);
+      int rc = gib_init(n, m, &gc, 0);
       if (rc) {
 	printf("Error:  %i\n", rc);
 	exit(EXIT_FAILURE);

@@ -37,7 +37,7 @@ int gib_buf_size = 1024*1024;
 #include <cuda_runtime_api.h>
 #include <cuda.h>
 
-int cudaInitialized = 0;
+int cudaInitialized[128] = {0};
 
 struct gpu_context_t {
   CUdevice dev;
@@ -112,7 +112,7 @@ void gib_cuda_compile(int n, int m, char *filename) { /* never returns */
 }
 
 /* Initializes the CPU and GPU runtimes. */
-int gib_init ( int n, int m, gib_context *c ) {
+int gib_init ( int n, int m, gib_context *c, int gpu_id ) {
   static CUcontext pCtx;
   static CUdevice dev;
   if (m < 2 || n < 2) {
@@ -127,23 +127,19 @@ int gib_init ( int n, int m, gib_context *c ) {
     exit(EXIT_FAILURE);
   }
 
-  int gpu_id = 0;
-  if (!cudaInitialized) {
+  if (!cudaInitialized[gpu_id]) {
     /* Initialize the CUDA runtime */
     int device_count;
     ERROR_CHECK_FAIL(cuInit(0));
     ERROR_CHECK_FAIL(cuDeviceGetCount(&device_count));
-    if (getenv("GIB_GPU_ID") != NULL) {
-        gpu_id = atoi(getenv("GIB_GPU_ID"));
-        if (device_count <= gpu_id) {
-            fprintf(stderr,
-                    "GIB_GPU_ID is set to an invalid value (%i).  There are \n"
-                    "only %i GPUs in the system.  Please specify another \n"
-                    "value.\n", gpu_id, device_count);
-            exit(-1);
-        }
+    if (device_count <= gpu_id) {
+      fprintf(stderr,
+              "gpu_id is set to an invalid value (%i).  There are \n"
+              "only %i GPUs in the system.  Please specify another \n"
+              "value.\n", gpu_id, device_count);
+      exit(-1);
     }
-    cudaInitialized = 1;
+    cudaInitialized[gpu_id] = 1;
   }
   ERROR_CHECK_FAIL(cuDeviceGet(&dev, gpu_id));
 #if GIB_USE_MMAP

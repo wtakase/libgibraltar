@@ -14,7 +14,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 /* Functions */
-int gib_init ( int n, int m, gib_context *c );
+int gib_init ( int n, int m, gib_context *c, int gpu_id );
 int gib_destroy ( gib_context c );
 int gib_alloc ( void **buffers, int buf_size, int *ld, gib_context c, int stream_num );
 int gib_free ( void *buffers, gib_context c );

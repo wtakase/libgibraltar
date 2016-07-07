@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
     for (int n = 2; n <= max_dim; n++) {
       fprintf(stderr, "n = %i, m = %i\n", n, m);
       gib_context gc;
-      int rc = gib_init(n, m, &gc);
+      int rc = gib_init(n, m, &gc, 0);
       gib_alloc((void **)(&buf), buf_size*sizeof(int), &size_sc, gc, 1);
       if (rc) {
 	printf("Error:  %i\n", rc);
